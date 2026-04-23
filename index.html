@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MyNav">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>MyNav - EFB</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        :root {
+            --primary: #4fc3f7;
+            --primary-dark: #0d2137;
+            --danger: #ff5252;
+            --go: #69f0ae;
+            --bg: #0a0f1a;
+            --card: #111827;
+            --card2: #1a2235;
+            --text: #e8eaf6;
+            --sub: #7986cb;
+            --meteo: #69f0ae;
+            --notam: #ffd740;
+            --supaip: #ff6e40;
+            --webcam: #ce93d8;
+            --border: rgba(79,195,247,0.15);
+            --glow: rgba(79,195,247,0.25);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            min-height: 100vh;
+            background-image: radial-gradient(ellipse at 20% 50%, rgba(13,33,55,0.8) 0%, transparent 60%),
+                              radial-gradient(ellipse at 80% 10%, rgba(79,195,247,0.05) 0%, transparent 50%);
+        }
+
+        .container { padding: 20px; max-width: 900px; margin: 0 auto; width: 100%; }
+
+        /* ══ HANGAR ══════════════════════════════════════ */
+        #hangarSection { text-align: center; padding-top: 40px; }
+
+        .logo {
+            font-size: 2.8em;
+            font-weight: 900;
+            letter-spacing: 8px;
+            background: linear-gradient(135deg, #4fc3f7, #81d4fa, #ffffff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 4px;
+        }
+        .logo-sub { color: var(--sub); font-size: 0.85em; letter-spacing: 3px; margin-bottom: 50px; }
+
+        .hangar-grid { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+        .plane-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 30px 25px;
+            width: 150px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .plane-card::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: linear-gradient(135deg, rgba(79,195,247,0.08), transparent);
+            opacity: 0; transition: 0.3s;
+        }
+        .plane-card:hover::before { opacity: 1; }
+        .plane-card:hover { border-color: var(--primary); transform: translateY(-6px); box-shadow: 0 12px 30px rgba(79,195,247,0.2); }
+        .plane-card .icon { font-size: 3rem; margin-bottom: 10px; }
+        .plane-card h2 { margin: 0 0 4px; font-size: 1.3em; color: var(--primary); }
+        .plane-card p { margin: 0; color: var(--sub); font-size: 0.8em; }
+
+        /* ══ COCKPIT ══════════════════════════════════════ */
+        .hidden { display: none !important; }
+
+        .header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 15px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px;
+        }
+        .btn-back {
+            background: rgba(255,255,255,0.07); color: var(--text); border: 1px solid var(--border);
+            padding: 10px 16px; border-radius: 10px; cursor: pointer; font-size: 0.9em; transition: 0.2s;
+        }
+        .btn-back:hover { background: rgba(255,255,255,0.12); }
+        .btn-clear {
+            background: transparent; color: var(--danger); border: 1px solid rgba(255,82,82,0.3);
+            padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.8em; transition: 0.2s;
+        }
+        .btn-clear:hover { background: rgba(255,82,82,0.1); }
+        .plane-title { font-size: 1.2em; font-weight: 700; color: var(--primary); letter-spacing: 2px; }
+
+        .grid-layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
+        @media (min-width: 768px) { .grid-layout { grid-template-columns: 1fr 1fr; } }
+
+        .card {
+            background: var(--card); border-radius: 16px; padding: 20px;
+            border: 1px solid var(--border);
+        }
+        .card h3 {
+            margin: 0 0 15px; color: var(--primary); font-size: 0.95em;
+            text-transform: uppercase; letter-spacing: 1px;
+            padding-bottom: 10px; border-bottom: 1px solid var(--border);
+        }
+
+        /* ══ DOCS ══════════════════════════════════════ */
+        .doc-link {
+            display: flex; align-items: center; gap: 12px;
+            background: var(--card2); color: var(--text);
+            text-decoration: none; padding: 14px; margin-bottom: 10px;
+            border-radius: 10px; font-weight: 600; font-size: 0.9em;
+            border: 1px solid var(--border); transition: 0.2s; cursor: pointer;
+        }
+        .doc-link:hover { background: rgba(79,195,247,0.08); border-color: rgba(79,195,247,0.4); }
+        .doc-link.checklist { border-left: 4px solid var(--danger); }
+        .doc-link.manual { border-left: 4px solid var(--primary); }
+        .doc-link.type-meteo { border-left: 4px solid var(--meteo); }
+        .doc-link.type-notam { border-left: 4px solid var(--notam); }
+        .doc-link.type-supaip { border-left: 4px solid var(--supaip); }
+        .doc-link.type-webcam { border-left: 4px solid var(--webcam); }
+
+        /* Badge de statut document */
+        .doc-badge {
+            margin-left: auto; font-size: 0.7em; padding: 3px 8px;
+            border-radius: 6px; font-weight: 700; flex-shrink: 0;
+        }
+        .badge-ok { background: rgba(105,240,174,0.15); color: var(--meteo); border: 1px solid rgba(105,240,174,0.3); }
+        .badge-missing { background: rgba(255,82,82,0.12); color: var(--danger); border: 1px solid rgba(255,82,82,0.3); }
+
+        /* ══ IMPORT DOC ══════════════════════════════════ */
+        .import-label {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            background: rgba(79,195,247,0.07); border: 1px dashed rgba(79,195,247,0.3);
+            border-radius: 8px; padding: 10px; cursor: pointer; font-size: 0.8em;
+            color: var(--sub); transition: 0.2s; margin-top: 5px;
+        }
+        .import-label:hover { background: rgba(79,195,247,0.12); color: var(--primary); }
+        .import-label input { display: none; }
+
+        /* ══ BRIEFING ══════════════════════════════════ */
+        .briefing-drop {
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            background: rgba(79,195,247,0.05);
+            border: 1px dashed rgba(79,195,247,0.3);
+            border-radius: 10px; padding: 16px 20px;
+            color: var(--sub); cursor: pointer; transition: 0.2s; margin-bottom: 10px;
+            font-size: 0.88em; width: 100%; box-sizing: border-box;
+        }
+        .briefing-drop:hover, .briefing-drop.drag-over { border-color: var(--primary); color: var(--primary); background: rgba(79,195,247,0.1); }
+
+        /* ══ LIENS EXTERNES ══════════════════════════════ */
+        .links-bar {
+            display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin: 20px 0;
+        }
+        .links-bar a {
+            font-size: 0.8em; padding: 10px 14px; white-space: nowrap;
+        }
+
+        /* ══ DECISION ══════════════════════════════════ */
+        .decision-zone {
+            background: var(--card); border-radius: 16px; padding: 20px;
+            border: 1px solid var(--border); margin-top: 16px; text-align: center;
+        }
+        .checkbox-group {
+            display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px;
+        }
+        .check-item {
+            display: flex; align-items: center; gap: 6px;
+            background: var(--card2); padding: 10px 16px; border-radius: 10px;
+            border: 1px solid var(--border); cursor: pointer; font-size: 0.9em; transition: 0.2s;
+        }
+        .check-item:has(input:checked) { border-color: rgba(105,240,174,0.5); background: rgba(105,240,174,0.08); }
+        .check-item input[type="checkbox"] { accent-color: var(--go); width: 16px; height: 16px; cursor: pointer; }
+
+        #goStatus {
+            font-size: 2.2em; font-weight: 900; padding: 15px 30px;
+            border-radius: 12px; text-transform: uppercase; letter-spacing: 4px;
+            background: rgba(255,82,82,0.1); color: var(--danger);
+            border: 2px solid rgba(255,82,82,0.3); margin-bottom: 15px; display: inline-block;
+            transition: all 0.4s;
+        }
+        #goStatus.is-go {
+            background: rgba(105,240,174,0.1); color: var(--go);
+            border-color: rgba(105,240,174,0.4); box-shadow: 0 0 30px rgba(105,240,174,0.15);
+        }
+
+        .btn-monvol {
+            background: linear-gradient(135deg, var(--primary-dark), #1a3a5c);
+            color: white; border: 1px solid rgba(79,195,247,0.4);
+            padding: 14px 30px; border-radius: 12px; font-weight: 700;
+            cursor: pointer; width: 100%; font-size: 1em; transition: 0.2s; margin-top: 5px;
+        }
+        .btn-monvol:hover { box-shadow: 0 0 20px rgba(79,195,247,0.2); }
+
+        /* ══ LOG VOL ══════════════════════════════════ */
+        #monVolSection { margin-top: 16px; }
+        .log-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+        .log-item { display: flex; flex-direction: column; gap: 6px; }
+        .log-item label { font-size: 0.78em; color: var(--sub); text-transform: uppercase; letter-spacing: 0.5px; }
+
+        input[type="number"], textarea {
+            background: var(--card2); padding: 11px 12px; border-radius: 8px;
+            border: 1px solid var(--border); width: 100%; color: white;
+            font-family: inherit; font-size: 0.95em; transition: 0.2s;
+        }
+        input[type="number"]:focus, textarea:focus {
+            outline: none; border-color: rgba(79,195,247,0.5); background: rgba(79,195,247,0.05);
+        }
+        textarea { resize: vertical; min-height: 80px; }
+
+        .fuel-split { display: flex; gap: 6px; align-items: center; }
+        .fuel-split input { min-width: 0; }
+        .total-badge {
+            background: var(--card2); padding: 8px 10px; border-radius: 8px;
+            font-size: 0.85em; font-weight: 700; color: var(--go);
+            border: 1px solid var(--border); white-space: nowrap; flex-shrink: 0;
+        }
+
+        .result-box {
+            background: var(--card2); padding: 16px; border-radius: 12px; margin: 16px 0;
+            border: 1px solid rgba(79,195,247,0.2);
+            display: flex; justify-content: space-around; text-align: center; gap: 10px;
+        }
+        .result-val { font-size: 1.5em; font-weight: 900; color: var(--primary); display: block; font-variant-numeric: tabular-nums; }
+        .result-lbl { font-size: 0.7em; color: var(--sub); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+
+        .btn-export {
+            background: linear-gradient(135deg, #1a5c3a, #0d3a24);
+            color: var(--go); border: 1px solid rgba(105,240,174,0.3);
+            padding: 14px; border-radius: 10px; font-weight: 700; cursor: pointer;
+            width: 100%; margin-top: 12px; font-size: 0.95em; transition: 0.2s;
+        }
+        .btn-export:hover { box-shadow: 0 0 20px rgba(105,240,174,0.15); }
+
+        .btn-archive {
+            background: linear-gradient(135deg, #2a1a5c, #1a0d3a);
+            color: #ce93d8; border: 1px solid rgba(206,147,216,0.3);
+            padding: 14px; border-radius: 10px; font-weight: 700; cursor: pointer;
+            width: 100%; margin-top: 10px; font-size: 0.95em; transition: 0.2s;
+        }
+        .btn-archive:hover { box-shadow: 0 0 20px rgba(206,147,216,0.15); }
+        .btn-archive:disabled { opacity: 0.5; cursor: wait; }
+
+        .btn-mail {
+            background: linear-gradient(135deg, #1a3a5c, #0d2137);
+            color: var(--primary); border: 1px solid rgba(79,195,247,0.3);
+            padding: 14px; border-radius: 10px; font-weight: 700; cursor: pointer;
+            width: 100%; margin-top: 10px; font-size: 0.95em; transition: 0.2s;
+        }
+        .btn-mail:hover { box-shadow: 0 0 20px rgba(79,195,247,0.15); }
+        .btn-mail:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* ══ TOAST ══════════════════════════════════ */
+        .toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px);
+            background: var(--card); border: 1px solid var(--border); color: var(--text);
+            padding: 12px 24px; border-radius: 12px; font-size: 0.9em; z-index: 9999;
+            transition: transform 0.3s; box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+        .toast.success { border-color: rgba(105,240,174,0.4); color: var(--go); }
+
+        /* ══ PRINT A4 ══════════════════════════════════ */
+        @media print {
+            @page { size: A4; margin: 15mm; }
+            body { background: white !important; color: black !important; }
+            #hangarSection, .btn-export, .btn-monvol, .no-print, .links-bar,
+            .header, .decision-zone, .grid-layout:first-of-type { display: none !important; }
+            #monVolSection { display: block !important; border: none !important; }
+            #printHeader { display: flex !important; justify-content: space-between; border-bottom: 2px solid black; margin-bottom: 20px; padding-bottom: 10px; color: black; }
+            .log-grid { border: 1px solid #ccc; padding: 15px; border-radius: 6px; }
+            input { border: none !important; border-bottom: 1px solid #999 !important; color: black !important; background: transparent !important; padding: 4px 0 !important; }
+            .result-box { border: 2px solid black !important; background: #f5f5f5 !important; }
+            .result-val { color: black !important; }
+            .total-badge { border: 1px solid black !important; color: black !important; background: #eee !important; }
+            #printBriefingList { display: block !important; margin-top: 20px; border-top: 1px solid #999; padding-top: 10px; }
+            textarea { border: 1px solid #ccc !important; color: black !important; background: transparent !important; }
+        }
+
+        /* Spinner */
+        .dot-saving {
+            display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+            background: var(--go); margin-left: 6px; vertical-align: middle;
+            animation: blink 1.5s infinite;
+        }
+        @keyframes blink { 0%,100% { opacity: 0.2 } 50% { opacity: 1 } }
+
+        /* ══ VISUALISEUR PDF.js ════════════════════════ */
+        #pdfViewer {
+            position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: #1a1a1a; z-index: 10000;
+            display: none; flex-direction: column;
+        }
+        #pdfViewer.active { display: flex; }
+
+        #pdfViewerHeader {
+            background: var(--card); border-bottom: 1px solid var(--border);
+            padding: 12px 16px; display: flex; align-items: center;
+            justify-content: space-between; gap: 10px; flex-shrink: 0;
+        }
+        #pdfViewerTitle { color: var(--primary); font-weight: 700; font-size: 0.95em; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #pdfViewerClose {
+            background: var(--danger); color: white; border: none;
+            padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; flex-shrink: 0;
+        }
+        .pdf-nav {
+            display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+        }
+        .pdf-nav button {
+            background: var(--card2); color: var(--text); border: 1px solid var(--border);
+            padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9em;
+        }
+        .pdf-nav button:disabled { opacity: 0.3; cursor: default; }
+        #pdfPageInfo { color: var(--sub); font-size: 0.85em; white-space: nowrap; }
+
+        #pdfViewerContent {
+            flex: 1; overflow-y: auto; overflow-x: auto;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 16px; gap: 12px; background: #2a2a2a;
+        }
+        #pdfViewerContent canvas {
+            max-width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            border-radius: 4px; display: block;
+        }
+        #pdfLoading {
+            color: var(--sub); font-size: 1em; padding: 40px; text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div id="hangarSection" class="container">
+    <div class="logo">MY NAV</div>
+    <div class="logo-sub">Electronic Flight Bag · Personnel</div>
+    <div class="hangar-grid">
+        <div class="plane-card" onclick="selectPlane('SG11')">
+            <div class="icon">✈️</div>
+            <h2>SG11</h2>
+            <p>Super Guépard</p>
+        </div>
+        <div class="plane-card" onclick="selectPlane('WT9')">
+            <div class="icon">⚡</div>
+            <h2>WT9</h2>
+            <p>WT9 Dynamic</p>
+        </div>
+    </div>
+</div>
+
+<div id="cockpitSection" class="container hidden">
+    <div class="header">
+        <button class="btn-back" onclick="goBack()">« Hangar</button>
+        <div class="plane-title" id="currentPlaneDisplay">Machine</div>
+        <button class="btn-clear" onclick="clearVol()">🗑 Effacer Vol</button>
+    </div>
+
+    <div class="grid-layout">
+        <div class="card">
+            <h3>📚 Doc Appareil</h3>
+            <div id="docsContainer"></div>
+        </div>
+
+        <div class="card">
+            <h3>☁️ Briefing du Jour</h3>
+            <label class="briefing-drop" id="dropZone" for="fileInput">
+                📎 Importer des documents (METEO, NOTAM…)
+                <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" style="display:none">
+            </label>
+            <div id="briefingList"></div>
+        </div>
+    </div>
+
+    <div class="links-bar">
+        <a href="https://aviation-pro.meteo.fr/login.php" target="_blank" class="doc-link type-meteo">🌐 METEO PRO</a>
+        <a href="https://sofia-briefing.aviation-civile.gouv.fr/sofia/pages/homepage.html" target="_blank" class="doc-link type-notam">🌐 SOFIA</a>
+        <a href="https://www.sia.aviation-civile.gouv.fr/schedules" target="_blank" class="doc-link manual">🌐 AZBA</a>
+        <a href="https://www.sia.aviation-civile.gouv.fr/documents/supaip/aip/id/6" target="_blank" class="doc-link type-supaip">📢 SUP AIP</a>
+        <a href="https://www.aeroclub-montalbanais.fr/aeroclub-montalbanais/webcam/" target="_blank" class="doc-link type-webcam">🎥 WEBCAM</a>
+    </div>
+
+    <div class="decision-zone">
+        <div class="checkbox-group">
+            <label class="check-item"><input type="checkbox" class="go-check" id="chkNOTAM" onchange="checkDecision()"> NOTAM</label>
+            <label class="check-item"><input type="checkbox" class="go-check" id="chkMETEO" onchange="checkDecision()"> METEO</label>
+            <label class="check-item"><input type="checkbox" class="go-check" id="chkAZBA" onchange="checkDecision()"> AZBA</label>
+            <label class="check-item"><input type="checkbox" class="go-check" id="chkSUPAIP" onchange="checkDecision()"> SUP AIP</label>
+        </div>
+        <div id="goStatus">NO GO</div>
+        <button id="btnMonVol" class="btn-monvol hidden" onclick="toggleMonVol()">📊 Mon Vol</button>
+    </div>
+
+    <div id="monVolSection" class="card hidden" style="margin-top: 16px; border-color: rgba(79,195,247,0.3);">
+
+        <div id="printHeader" style="display:none;">
+            <div><h1 style="margin:0;">COMPTE RENDU DE VOL</h1><div id="pdfMachine" style="font-size:14pt; font-weight:bold; margin-top:5px;"></div></div>
+            <div style="text-align:right;"><div id="pdfDate" style="font-weight:bold;"></div><div>MyNav EFB</div></div>
+        </div>
+
+        <h3 class="no-print">📝 Log de Vol & Fluides <span class="dot-saving" id="saveDot" style="display:none"></span></h3>
+
+        <div class="log-grid">
+            <div class="log-item">
+                <label>Horamètre Départ</label>
+                <input type="number" id="horaDep" step="0.01" placeholder="0.00" oninput="calculerTout(); saveVol()">
+            </div>
+            <div class="log-item">
+                <label>Horamètre Retour</label>
+                <input type="number" id="horaArr" step="0.01" placeholder="0.00" oninput="calculerTout(); saveVol()">
+            </div>
+
+            <div id="fuelInputZone" style="grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 14px;"></div>
+
+            <div class="log-item">
+                <label>Huile (appoint ml)</label>
+                <input type="number" id="huile" placeholder="Ex: 200" oninput="saveVol()">
+            </div>
+            <div class="log-item">
+                <label>Landings</label>
+                <input type="number" id="landings" oninput="saveVol()">
+            </div>
+            <div class="log-item" style="grid-column: span 2;">
+                <label>Fuel Ajouté (L)</label>
+                <input type="number" id="fuelAdd" oninput="saveVol()">
+            </div>
+        </div>
+
+        <div class="result-box">
+            <div><span class="result-val" id="resTemps">0.00</span><div class="result-lbl">Temps Vol (h)</div></div>
+            <div><span class="result-val" id="resReel">0.0</span><div class="result-lbl">Conso Réelle (L)</div></div>
+            <div><span class="result-val" id="resTh">0.0</span><div class="result-lbl">Conso Théo (L)</div></div>
+        </div>
+
+        <div class="log-item">
+            <label>💬 Observations</label>
+            <textarea id="observations" placeholder="Remarques techniques, incidents..." oninput="saveVol()"></textarea>
+        </div>
+
+        <div id="printBriefingList" style="display:none;">
+            <strong>Dossier de briefing :</strong><ul id="printFilesNames"></ul>
+        </div>
+
+        <button class="btn-export no-print" onclick="exportPDF()">📄 Exporter PDF</button>
+        <button class="btn-archive no-print" id="btnArchive" onclick="archiverVol()">🗜 Archiver le Dossier de Vol (ZIP)</button>
+        <button class="btn-mail no-print" id="btnMail" onclick="envoyerMail()" disabled>📧 Envoyer par Mail</button>
+        <div id="archiveInfo" style="display:none; margin-top:10px; font-size:0.8em; color:var(--sub); text-align:center;"></div>
+    </div>
+    <div style="height:60px;"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════════════════════════════════════ -->
+<!--  VISUALISEUR PDF INTÉGRÉ                           -->
+<!-- ══════════════════════════════════════════════════ -->
+<div id="pdfViewer">
+    <div id="pdfViewerHeader">
+        <div id="pdfViewerTitle">Document PDF</div>
+        <div class="pdf-nav">
+            <button id="btnPrev" onclick="pdfPrevPage()">◀</button>
+            <span id="pdfPageInfo">1 / 1</span>
+            <button id="btnNext" onclick="pdfNextPage()">▶</button>
+        </div>
+        <button id="pdfViewerClose" onclick="closePDFViewer()">✕ Fermer</button>
+    </div>
+    <div id="pdfViewerContent">
+        <div id="pdfLoading">⏳ Chargement…</div>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  ÉTAT GLOBAL
+// ══════════════════════════════════════════════════════
+let currentPlane = '';
+let briefingFiles = []; // [{name, url, type}]
+let saveTimer = null;
+
+// ══════════════════════════════════════════════════════
+//  SÉLECTION AVION
+// ══════════════════════════════════════════════════════
+function selectPlane(plane) {
+    currentPlane = plane;
+    document.getElementById('hangarSection').classList.add('hidden');
+    document.getElementById('cockpitSection').classList.remove('hidden');
+    document.getElementById('currentPlaneDisplay').textContent = plane;
+
+    // Fuel inputs selon avion
+    buildFuelInputs(plane);
+
+    // Checklist / Manuel
+    buildDocsUI(plane);
+
+    // Restaurer données sauvegardées
+    loadVol(plane);
+
+    // Restaurer cases cochées
+    loadChecks(plane);
+}
+
+// ══════════════════════════════════════════════════════
+//  DOCUMENTS AVION (stockés dans localStorage en base64)
+// ══════════════════════════════════════════════════════
+const DOC_DEFS = {
+    SG11: [
+        { id: 'CHECKLIST_SG11', label: 'CHECKLIST SG11', cls: 'checklist', icon: '⚠️' },
+        { id: 'MANUEL_SG11',    label: 'MANUEL DE VOL SG11 NOT AVLB', cls: 'manual', icon: '📄' },
+    ],
+    WT9: [
+        { id: 'CHECKLIST_WT9', label: 'CHECKLIST WT9', cls: 'checklist', icon: '⚠️' },
+        { id: 'MANUEL_WT9',    label: 'MANUEL DE VOL WT9 NOT AVLB', cls: 'manual', icon: '📄' },
+    ]
+};
+
+function buildDocsUI(plane) {
+    const container = document.getElementById('docsContainer');
+    container.innerHTML = '';
+
+    DOC_DEFS[plane].forEach(def => {
+        const saved = getDoc(def.id);
+
+        // Ligne doc
+        const row = document.createElement('div');
+        row.style.marginBottom = '12px';
+
+        const link = document.createElement('div');
+        link.className = 'doc-link ' + def.cls;
+        link.innerHTML = `${def.icon} ${def.label}
+            <span class="doc-badge ${saved ? 'badge-ok' : 'badge-missing'}" id="badge_${def.id}">
+                ${saved ? '✓ OK' : '! Manquant'}
+            </span>`;
+
+        if (saved) {
+            link.title = 'Appuyez pour ouvrir';
+            link.style.cursor = 'pointer';
+            link.onclick = () => openDoc(def.id);
+        }
+
+        // Boutons bas
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:8px;margin-top:4px;';
+
+        // Bouton importer
+        const importLabel = document.createElement('label');
+        importLabel.className = 'import-label';
+        importLabel.style.flex = '1';
+        importLabel.innerHTML = `<input type="file" accept=".pdf" style="display:none"> 📥 ${saved ? 'Remplacer' : 'Importer'} le PDF`;
+
+        const fileIn = importLabel.querySelector('input');
+        fileIn.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                saveDoc(def.id, reader.result);
+                
+                // NOUVEAU : Purger l'ancien blob pour forcer la mise à jour
+                if (blobCache[def.id]) {
+                    URL.revokeObjectURL(blobCache[def.id]); // Libère la RAM
+                    delete blobCache[def.id];
+                }
+
+                link.onclick = () => openDoc(def.id);
+                link.style.cursor = 'pointer';
+                link.querySelector('.doc-badge').textContent = '✓ OK';
+                link.querySelector('.doc-badge').className = 'doc-badge badge-ok';
+                importLabel.querySelector('input').replaceWith(Object.assign(document.createElement('input'),{type:'file',accept:'.pdf',style:'display:none',onchange:fileIn.onchange}));
+                importLabel.childNodes[1].textContent = ' 📥 Remplacer le PDF';
+                if (delBtn) delBtn.style.display = 'block';
+                showToast('✅ ' + def.label + ' sauvegardé ! (' + plane + ')', true);
+            };
+            reader.readAsDataURL(file);
+        };
+
+        btnRow.appendChild(importLabel);
+
+        // Bouton supprimer — toujours créé, visible si doc présent
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '🗑';
+        delBtn.title = 'Supprimer ce PDF';
+        delBtn.style.cssText = 'background:rgba(255,82,82,0.1);border:1px solid rgba(255,82,82,0.3);color:var(--danger);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:0.9em;flex-shrink:0;';
+        delBtn.style.display = saved ? 'block' : 'none';
+        delBtn.onclick = () => {
+            if (!confirm('Supprimer ' + def.label + ' de ' + plane + ' ?')) return;
+            try { localStorage.removeItem('doc_' + def.id); delete blobCache[def.id]; } catch(e) {}
+            link.onclick = null;
+            link.style.cursor = 'default';
+            link.querySelector('.doc-badge').textContent = '! Manquant';
+            link.querySelector('.doc-badge').className = 'doc-badge badge-missing';
+            delBtn.style.display = 'none';
+            showToast('🗑 ' + def.label + ' supprimé');
+        };
+        btnRow.appendChild(delBtn);
+
+        row.appendChild(link);
+        row.appendChild(btnRow);
+        container.appendChild(row);
+    });
+}
+
+function saveDoc(id, dataUrl) {
+    try { localStorage.setItem('doc_' + id, dataUrl); } catch(e) { showToast('⚠️ Stockage plein — PDF trop lourd'); }
+}
+
+function getDoc(id) {
+    try { return localStorage.getItem('doc_' + id); } catch(e) { return null; }
+}
+
+// Cache des blob URLs pour éviter de recréer le même blob deux fois
+const blobCache = {};
+
+// NOUVEAU : Fonction openDoc avec visualiseur intégré
+async function openDoc(id) {
+    const data = getDoc(id);
+    if (!data) return;
+
+    try {
+        if (!blobCache[id]) {
+            // Conversion native et ultra-rapide via fetch()
+            const response = await fetch(data);
+            const blob = await response.blob();
+            blobCache[id] = URL.createObjectURL(blob);
+        }
+        
+        // Ouvrir dans le visualiseur intégré
+        openPDFViewer(blobCache[id], id + '.pdf');
+
+    } catch(e) {
+        console.error("Erreur de Blob :", e);
+        
+        // Fallback : téléchargement direct
+        const a = document.createElement('a');
+        a.href = data;
+        a.download = id + '.pdf';
+        a.click();
+    }
+}
+
+// ══════════════════════════════════════════════════════
+//  FUEL INPUTS
+// ══════════════════════════════════════════════════════
+function buildFuelInputs(plane) {
+    const zone = document.getElementById('fuelInputZone');
+    if (plane === 'WT9') {
+        zone.innerHTML = `
+            <div class="log-item">
+                <label>Fuel Départ (G / D)</label>
+                <div class="fuel-split">
+                    <input type="number" id="fuelDepG" placeholder="G" oninput="calculerTout();saveVol()">
+                    <input type="number" id="fuelDepD" placeholder="D" oninput="calculerTout();saveVol()">
+                    <div class="total-badge" id="totalDep">0 L</div>
+                </div>
+            </div>
+            <div class="log-item">
+                <label>Fuel Arrivée (G / D)</label>
+                <div class="fuel-split">
+                    <input type="number" id="fuelArrG" placeholder="G" oninput="calculerTout();saveVol()">
+                    <input type="number" id="fuelArrD" placeholder="D" oninput="calculerTout();saveVol()">
+                    <div class="total-badge" id="totalArr">0 L</div>
+                </div>
+            </div>`;
+    } else {
+        zone.innerHTML = `
+            <div class="log-item"><label>Fuel Départ (L)</label><input type="number" id="fuelDep" oninput="calculerTout();saveVol()"></div>
+            <div class="log-item"><label>Fuel Retour (L)</label><input type="number" id="fuelArr" oninput="calculerTout();saveVol()"></div>`;
+    }
+}
+
+// ══════════════════════════════════════════════════════
+//  CALCULS
+// ══════════════════════════════════════════════════════
+function calculerTout() {
+    const dep = parseFloat(document.getElementById('horaDep').value) || 0;
+    const arr = parseFloat(document.getElementById('horaArr').value) || 0;
+    const diff = Math.max(0, arr - dep);
+
+    document.getElementById('resTemps').textContent = diff.toFixed(2);
+    document.getElementById('resTh').textContent = (diff * 15).toFixed(1);
+
+    let fDep = 0, fArr = 0;
+    if (currentPlane === 'WT9') {
+        const gD = parseFloat(document.getElementById('fuelDepG')?.value) || 0;
+        const dD = parseFloat(document.getElementById('fuelDepD')?.value) || 0;
+        const gA = parseFloat(document.getElementById('fuelArrG')?.value) || 0;
+        const dA = parseFloat(document.getElementById('fuelArrD')?.value) || 0;
+        fDep = gD + dD; fArr = gA + dA;
+        const tDep = document.getElementById('totalDep');
+        const tArr = document.getElementById('totalArr');
+        if (tDep) tDep.textContent = fDep + ' L';
+        if (tArr) tArr.textContent = fArr + ' L';
+    } else {
+        fDep = parseFloat(document.getElementById('fuelDep')?.value) || 0;
+        fArr = parseFloat(document.getElementById('fuelArr')?.value) || 0;
+    }
+    document.getElementById('resReel').textContent = Math.max(0, fDep - fArr).toFixed(1);
+}
+
+// ══════════════════════════════════════════════════════
+//  SAUVEGARDE AUTO (localStorage)
+// ══════════════════════════════════════════════════════
+function saveVol() {
+    // Debounce 600ms
+    clearTimeout(saveTimer);
+    const dot = document.getElementById('saveDot');
+    if (dot) dot.style.display = 'inline-block';
+    saveTimer = setTimeout(() => {
+        const key = 'vol_' + currentPlane;
+        const fields = ['horaDep','horaArr','huile','landings','fuelAdd','observations',
+                        'fuelDep','fuelArr','fuelDepG','fuelDepD','fuelArrG','fuelArrD'];
+        const data = {};
+        fields.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) data[id] = el.value;
+        });
+        try {
+            localStorage.setItem(key, JSON.stringify(data));
+        } catch(e) {}
+        if (dot) dot.style.display = 'none';
+    }, 600);
+}
+
+function loadVol(plane) {
+    const key = 'vol_' + plane;
+    let data = {};
+    try { data = JSON.parse(localStorage.getItem(key) || '{}'); } catch(e) {}
+
+    // Délai pour que les inputs fuel soient dans le DOM
+    setTimeout(() => {
+        Object.entries(data).forEach(([id, val]) => {
+            const el = document.getElementById(id);
+            if (el) el.value = val;
+        });
+        calculerTout();
+    }, 50);
+}
+
+// ══════════════════════════════════════════════════════
+//  SAUVEGARDE CASES À COCHER
+// ══════════════════════════════════════════════════════
+function saveChecks(plane) {
+    const state = {
+        NOTAM: document.getElementById('chkNOTAM')?.checked,
+        METEO: document.getElementById('chkMETEO')?.checked,
+        AZBA:  document.getElementById('chkAZBA')?.checked,
+        SUPAIP: document.getElementById('chkSUPAIP')?.checked,
+    };
+    try { localStorage.setItem('checks_' + plane, JSON.stringify(state)); } catch(e) {}
+}
+
+function loadChecks(plane) {
+    let state = {};
+    try { state = JSON.parse(localStorage.getItem('checks_' + plane) || '{}'); } catch(e) {}
+    Object.entries(state).forEach(([k, v]) => {
+        const el = document.getElementById('chk' + k);
+        if (el) el.checked = v;
+    });
+    checkDecision();
+}
+
+// ══════════════════════════════════════════════════════
+//  DÉCISION GO / NO-GO
+// ══════════════════════════════════════════════════════
+function checkDecision() {
+    const all = Array.from(document.querySelectorAll('.go-check')).every(c => c.checked);
+    const status = document.getElementById('goStatus');
+    const btn = document.getElementById('btnMonVol');
+    status.textContent = all ? '🚀 GO' : 'NO GO';
+    status.className = all ? 'is-go' : '';
+    btn.classList.toggle('hidden', !all);
+    saveChecks(currentPlane);
+}
+
+// ══════════════════════════════════════════════════════
+//  BRIEFING — drag & drop + input file
+// ══════════════════════════════════════════════════════
+document.getElementById('fileInput').addEventListener('change', function() {
+    Array.from(this.files).forEach(addBriefingFile);
+    this.value = '';
+});
+
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    Array.from(e.dataTransfer.files).forEach(addBriefingFile);
+});
+
+function addBriefingFile(file) {
+    const url = URL.createObjectURL(file);
+    briefingFiles.push({ name: file.name, url });
+
+    const a = document.createElement('a');
+    a.href = '#';
+    a.className = 'doc-link';
+    a.innerHTML = `📄 ${file.name} <span style="margin-left:auto;font-size:0.75em;color:var(--sub);">✕</span>`;
+    a.onclick = (e) => {
+        e.preventDefault();
+        openPDFViewer(url, file.name);
+    };
+    a.querySelector('span').onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        briefingFiles = briefingFiles.filter(f => f.name !== file.name);
+        a.remove();
+    };
+    document.getElementById('briefingList').appendChild(a);
+}
+
+// ══════════════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════════════
+function goBack() {
+    document.getElementById('hangarSection').classList.remove('hidden');
+    document.getElementById('cockpitSection').classList.add('hidden');
+    document.getElementById('monVolSection').classList.add('hidden');
+}
+
+function toggleMonVol() {
+    const s = document.getElementById('monVolSection');
+    s.classList.toggle('hidden');
+    if (!s.classList.contains('hidden')) {
+        setTimeout(() => s.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+}
+
+// ══════════════════════════════════════════════════════
+//  EFFACER VOL (seulement les données, pas les docs)
+// ══════════════════════════════════════════════════════
+function clearVol() {
+    if (!confirm('Effacer les données du vol en cours ?')) return;
+    document.querySelectorAll('input[type="number"], textarea').forEach(i => i.value = '');
+    document.getElementById('briefingList').innerHTML = '';
+    briefingFiles = [];
+    document.getElementById('resTemps').textContent = '0.00';
+    document.getElementById('resTh').textContent = '0.0';
+    document.getElementById('resReel').textContent = '0.0';
+    document.querySelectorAll('.go-check').forEach(c => c.checked = false);
+    checkDecision();
+    try { localStorage.removeItem('vol_' + currentPlane); localStorage.removeItem('checks_' + currentPlane); } catch(e) {}
+    showToast('🗑 Vol effacé');
+}
+
+// ══════════════════════════════════════════════════════
+//  EXPORT PDF
+// ══════════════════════════════════════════════════════
+function exportPDF() {
+    const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    document.getElementById('pdfMachine').textContent = 'APPAREIL : ' + currentPlane;
+    document.getElementById('pdfDate').textContent = dateStr;
+    document.getElementById('printFilesNames').innerHTML =
+        briefingFiles.length > 0
+            ? briefingFiles.map(f => `<li>${f.name}</li>`).join('')
+            : '<li>Aucun document joint</li>';
+    window.print();
+}
+
+// ══════════════════════════════════════════════════════
+//  ARCHIVAGE ZIP
+// ══════════════════════════════════════════════════════
+let lastZipBlob = null;
+let lastZipName = '';
+
+async function archiverVol() {
+    const btn = document.getElementById('btnArchive');
+    btn.disabled = true;
+    btn.textContent = '⏳ Génération ZIP…';
+
+    try {
+        const zip = new JSZip();
+        const date = new Date();
+        const dateStr = date.toISOString().slice(0,10); // YYYY-MM-DD
+        const folderName = `VOL_${currentPlane}_${dateStr}`;
+        const folder = zip.folder(folderName);
+
+        // ── 1. Log de vol (texte)
+        const horaDep  = document.getElementById('horaDep')?.value || '';
+        const horaArr  = document.getElementById('horaArr')?.value || '';
+        const huile    = document.getElementById('huile')?.value || '';
+        const landings = document.getElementById('landings')?.value || '';
+        const fuelAdd  = document.getElementById('fuelAdd')?.value || '';
+        const obs      = document.getElementById('observations')?.value || '';
+        const temps    = document.getElementById('resTemps')?.textContent || '';
+        const reel     = document.getElementById('resReel')?.textContent || '';
+        const theo     = document.getElementById('resTh')?.textContent || '';
+
+        let fuelBlock = '';
+        if (currentPlane === 'WT9') {
+            const gD = document.getElementById('fuelDepG')?.value || '';
+            const dD = document.getElementById('fuelDepD')?.value || '';
+            const gA = document.getElementById('fuelArrG')?.value || '';
+            const dA = document.getElementById('fuelArrD')?.value || '';
+            fuelBlock = `Fuel Départ G/D : ${gD} / ${dD} L\nFuel Arrivée G/D : ${gA} / ${dA} L`;
+        } else {
+            fuelBlock = `Fuel Départ : ${document.getElementById('fuelDep')?.value || ''} L\nFuel Retour : ${document.getElementById('fuelArr')?.value || ''} L`;
+        }
+
+        const checks = ['NOTAM','METEO','AZBA','SUPAIP'].map(c => {
+            const ok = document.getElementById('chk'+c)?.checked;
+            return `${c} : ${ok ? '✓' : '✗'}`;
+        }).join('\n');
+
+        const logTxt =
+`╔══════════════════════════════════════╗
+║        COMPTE RENDU DE VOL           ║
+╠══════════════════════════════════════╣
+  Appareil  : ${currentPlane}
+  Date      : ${date.toLocaleDateString('fr-FR')}
+  Heure     : ${date.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}
+╠══════════════════════════════════════╣
+  HORAMÈTRES
+  Départ    : ${horaDep}
+  Retour    : ${horaArr}
+  Temps vol : ${temps} h
+╠══════════════════════════════════════╣
+  FLUIDES
+${fuelBlock}
+  Conso réelle : ${reel} L
+  Conso théo   : ${theo} L
+  Fuel ajouté  : ${fuelAdd} L
+  Huile appoint: ${huile} ml
+╠══════════════════════════════════════╣
+  LANDINGS : ${landings}
+╠══════════════════════════════════════╣
+  BRIEFING CHECK
+${checks}
+╠══════════════════════════════════════╣
+  OBSERVATIONS
+${obs || '(aucune)'}
+╚══════════════════════════════════════╝
+Généré par MyNav EFB`;
+
+        folder.file('log_vol.txt', logTxt);
+
+        // ── 2. Fichiers briefing du jour (METEO, NOTAM…)
+        if (briefingFiles.length > 0) {
+            const briefFolder = folder.folder('briefing');
+            for (const bf of briefingFiles) {
+                try {
+                    const resp = await fetch(bf.url);
+                    const blob = await resp.blob();
+                    const arrayBuffer = await blob.arrayBuffer();
+                    briefFolder.file(bf.name, arrayBuffer);
+                } catch(e) {}
+            }
+        }
+
+        // ── Génération ZIP
+        lastZipName = `${folderName}.zip`;
+        lastZipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+
+        // Téléchargement automatique
+        const url = URL.createObjectURL(lastZipBlob);
+        const a = document.createElement('a');
+        a.href = url; a.download = lastZipName; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+        // Activer le bouton mail
+        document.getElementById('btnMail').disabled = false;
+        const info = document.getElementById('archiveInfo');
+        info.style.display = 'block';
+        info.textContent = `✅ ZIP généré : ${lastZipName} · ${(lastZipBlob.size/1024).toFixed(0)} Ko`;
+
+        showToast('🗜 Archive ZIP générée !', true);
+
+    } catch(e) {
+        showToast('⚠️ Erreur lors de la génération ZIP');
+        console.error(e);
+    }
+
+    btn.disabled = false;
+    btn.textContent = '🗜 Archiver le Dossier de Vol (ZIP)';
+}
+
+// ══════════════════════════════════════════════════════
+//  ENVOI PAR MAIL
+// ══════════════════════════════════════════════════════
+function envoyerMail() {
+    if (!lastZipBlob) { showToast('⚠️ Générez d\'abord l\'archive ZIP'); return; }
+
+    const date = new Date().toLocaleDateString('fr-FR');
+    const subject = encodeURIComponent(`Dossier de vol ${currentPlane} – ${date}`);
+    const body = encodeURIComponent(
+`Bonjour,
+
+Veuillez trouver ci-joint le dossier de vol archivé.
+
+Appareil : ${currentPlane}
+Date : ${date}
+Fichier : ${lastZipName}
+
+Généré par MyNav EFB`);
+
+    // Sur mobile : ouvre l'appli mail native
+    // Le ZIP a déjà été téléchargé, l'utilisateur l'attache manuellement
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+
+    showToast('📧 Application mail ouverte — attachez le ZIP téléchargé');
+}
+
+// ══════════════════════════════════════════════════════
+//  VISUALISEUR PDF.js — universel (Android, iOS, Desktop)
+// ══════════════════════════════════════════════════════
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let pdfDoc = null;
+let pdfCurrentPage = 1;
+let pdfTotalPages = 0;
+let pdfRendering = false;
+
+async function openPDFViewer(blobUrl, name) {
+    if (!blobUrl) { showToast('⚠️ Fichier non disponible'); return; }
+
+    const viewer  = document.getElementById('pdfViewer');
+    const title   = document.getElementById('pdfViewerTitle');
+    const content = document.getElementById('pdfViewerContent');
+
+    title.textContent = name || 'Document PDF';
+    content.innerHTML = '<div id="pdfLoading">⏳ Chargement…</div>';
+    viewer.classList.add('active');
+
+    try {
+        const loadingTask = pdfjsLib.getDocument(blobUrl);
+        pdfDoc = await loadingTask.promise;
+        pdfTotalPages = pdfDoc.numPages;
+        pdfCurrentPage = 1;
+        content.innerHTML = ''; // vider le loading
+        await renderAllPages();
+        updateNavButtons();
+    } catch(e) {
+        content.innerHTML = '<div id="pdfLoading" style="color:var(--danger)">⚠️ Impossible d\'afficher ce PDF</div>';
+        console.error(e);
+    }
+}
+
+async function renderAllPages() {
+    const content = document.getElementById('pdfViewerContent');
+    const containerWidth = content.clientWidth - 32;
+
+    for (let pageNum = 1; pageNum <= pdfTotalPages; pageNum++) {
+        const page     = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1 });
+        const scale    = Math.min(containerWidth / viewport.width, 2.5);
+        const scaled   = page.getViewport({ scale });
+
+        const canvas  = document.createElement('canvas');
+        canvas.width  = scaled.width;
+        canvas.height = scaled.height;
+        canvas.id     = 'pdfPage_' + pageNum;
+        content.appendChild(canvas);
+
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: scaled }).promise;
+    }
+    updateNavButtons();
+}
+
+function pdfPrevPage() {
+    const pages = document.querySelectorAll('#pdfViewerContent canvas');
+    if (pdfCurrentPage > 1) {
+        pdfCurrentPage--;
+        document.getElementById('pdfPage_' + pdfCurrentPage)?.scrollIntoView({ behavior: 'smooth' });
+        updateNavButtons();
+    }
+}
+
+function pdfNextPage() {
+    const pages = document.querySelectorAll('#pdfViewerContent canvas');
+    if (pdfCurrentPage < pdfTotalPages) {
+        pdfCurrentPage++;
+        document.getElementById('pdfPage_' + pdfCurrentPage)?.scrollIntoView({ behavior: 'smooth' });
+        updateNavButtons();
+    }
+}
+
+function updateNavButtons() {
+    document.getElementById('pdfPageInfo').textContent = `${pdfCurrentPage} / ${pdfTotalPages}`;
+    document.getElementById('btnPrev').disabled = pdfCurrentPage <= 1;
+    document.getElementById('btnNext').disabled = pdfCurrentPage >= pdfTotalPages;
+}
+
+// Mise à jour de la page courante au scroll
+document.getElementById('pdfViewerContent').addEventListener('scroll', () => {
+    const canvases = document.querySelectorAll('#pdfViewerContent canvas');
+    const content  = document.getElementById('pdfViewerContent');
+    const scrollTop = content.scrollTop + content.clientHeight / 2;
+    canvases.forEach(c => {
+        if (c.offsetTop <= scrollTop) {
+            const num = parseInt(c.id.replace('pdfPage_', ''));
+            if (num !== pdfCurrentPage) { pdfCurrentPage = num; updateNavButtons(); }
+        }
+    });
+});
+
+function closePDFViewer() {
+    document.getElementById('pdfViewer').classList.remove('active');
+    document.getElementById('pdfViewerContent').innerHTML = '<div id="pdfLoading">⏳ Chargement…</div>';
+    pdfDoc = null; pdfCurrentPage = 1; pdfTotalPages = 0;
+}
+
+// Fermer avec la touche ESC
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closePDFViewer();
+    }
+});
+
+// ══════════════════════════════════════════════════════
+//  PWA — SERVICE WORKER (inline, évite un fichier séparé)
+// ══════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+    const swCode = `
+const CACHE = 'mynav-v1';
+self.addEventListener('install', e => {
+    self.skipWaiting();
+});
+self.addEventListener('fetch', e => {
+    e.respondWith(
+        caches.match(e.request).then(r => r || fetch(e.request).catch(() => new Response('Hors ligne', {status: 503})))
+    );
+});`;
+    const blob = new Blob([swCode], { type: 'application/javascript' });
+    const swUrl = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(swUrl).catch(() => {});
+}
+</script>
+</body>
+</html>
