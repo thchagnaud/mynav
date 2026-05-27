@@ -131,7 +131,6 @@
         .doc-link.type-supaip { border-left: 4px solid var(--supaip); }
         .doc-link.type-webcam { border-left: 4px solid var(--webcam); }
 
-        /* Badge de statut document */
         .doc-badge {
             margin-left: auto; font-size: 0.7em; padding: 3px 8px;
             border-radius: 6px; font-weight: 700; flex-shrink: 0;
@@ -262,6 +261,36 @@
         .btn-mail:hover { box-shadow: 0 0 20px rgba(79,195,247,0.15); }
         .btn-mail:disabled { opacity: 0.4; cursor: not-allowed; }
 
+        /* ══ NOTES DE VOL ══════════════════════════════ */
+        .notes-toolbar {
+            display: flex; gap: 10px; margin-bottom: 10px;
+            flex-wrap: wrap; align-items: center;
+        }
+        .btn-tool {
+            padding: 8px 16px; border-radius: 8px; font-weight: 700;
+            cursor: pointer; font-size: 0.9em; transition: 0.2s;
+            border: 1px solid var(--border); background: var(--card2); color: var(--text);
+        }
+        .btn-tool.active {
+            border: 2px solid var(--primary);
+            background: rgba(79,195,247,0.15);
+            color: var(--primary);
+        }
+        .btn-tool-danger {
+            padding: 8px 16px; border-radius: 8px; font-weight: 700;
+            cursor: pointer; font-size: 0.9em; transition: 0.2s;
+            border: 1px solid rgba(255,82,82,0.3);
+            background: rgba(255,82,82,0.08);
+            color: var(--danger); margin-left: auto;
+        }
+        .btn-tool-danger:hover { background: rgba(255,82,82,0.15); }
+        #noteCanvas {
+            width: 100%; border-radius: 10px;
+            border: 1px solid var(--border);
+            background: white; display: block;
+            touch-action: none; cursor: crosshair;
+        }
+
         /* ══ TOAST ══════════════════════════════════ */
         .toast {
             position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px);
@@ -287,6 +316,7 @@
             .total-badge { border: 1px solid black !important; color: black !important; background: #eee !important; }
             #printBriefingList { display: block !important; margin-top: 20px; border-top: 1px solid #999; padding-top: 10px; }
             textarea { border: 1px solid #ccc !important; color: black !important; background: transparent !important; }
+            #notesSection { display: none !important; }
         }
 
         /* Spinner */
@@ -401,6 +431,7 @@
         </div>
         <div id="goStatus">NO GO</div>
         <button id="btnMonVol" class="btn-monvol hidden" onclick="toggleMonVol()">📊 Mon Vol</button>
+        <button id="btnNotes" class="btn-monvol hidden" onclick="toggleNotes()" style="margin-top:8px;">✏️ Notes de Vol</button>
     </div>
 
     <div id="monVolSection" class="card hidden" style="margin-top: 16px; border-color: rgba(79,195,247,0.3);">
@@ -458,6 +489,18 @@
         <button class="btn-mail no-print" id="btnMail" onclick="envoyerMail()" disabled>📧 Envoyer par Mail</button>
         <div id="archiveInfo" style="display:none; margin-top:10px; font-size:0.8em; color:var(--sub); text-align:center;"></div>
     </div>
+
+    <!-- ══ NOTES DE VOL ══════════════════════════════════ -->
+    <div id="notesSection" class="card hidden" style="margin-top: 16px; border-color: rgba(79,195,247,0.3);">
+        <h3 class="no-print">✏️ Notes de Vol</h3>
+        <div class="notes-toolbar">
+            <button id="btnPen" class="btn-tool active" onclick="setTool('pen')">✒️ Stylo</button>
+            <button id="btnEraser" class="btn-tool" onclick="setTool('eraser')">🧹 Gomme</button>
+            <button class="btn-tool-danger" onclick="clearCanvas()">🗑 Effacer tout</button>
+        </div>
+        <canvas id="noteCanvas"></canvas>
+    </div>
+
     <div style="height:60px;"></div>
 </div>
 
@@ -486,7 +529,7 @@
 //  ÉTAT GLOBAL
 // ══════════════════════════════════════════════════════
 let currentPlane = '';
-let briefingFiles = []; // [{name, url, type}]
+let briefingFiles = [];
 let saveTimer = null;
 
 // ══════════════════════════════════════════════════════
@@ -498,21 +541,14 @@ function selectPlane(plane) {
     document.getElementById('cockpitSection').classList.remove('hidden');
     document.getElementById('currentPlaneDisplay').textContent = plane;
 
-    // Fuel inputs selon avion
     buildFuelInputs(plane);
-
-    // Checklist / Manuel
     buildDocsUI(plane);
-
-    // Restaurer données sauvegardées
     loadVol(plane);
-
-    // Restaurer cases cochées
     loadChecks(plane);
 }
 
 // ══════════════════════════════════════════════════════
-//  DOCUMENTS AVION (stockés dans localStorage en base64)
+//  DOCUMENTS AVION
 // ══════════════════════════════════════════════════════
 const DOC_DEFS = {
     SG11: [
@@ -532,7 +568,6 @@ function buildDocsUI(plane) {
     DOC_DEFS[plane].forEach(def => {
         const saved = getDoc(def.id);
 
-        // Ligne doc
         const row = document.createElement('div');
         row.style.marginBottom = '12px';
 
@@ -549,11 +584,9 @@ function buildDocsUI(plane) {
             link.onclick = () => openDoc(def.id);
         }
 
-        // Boutons bas
         const btnRow = document.createElement('div');
         btnRow.style.cssText = 'display:flex;gap:8px;margin-top:4px;';
 
-        // Bouton importer
         const importLabel = document.createElement('label');
         importLabel.className = 'import-label';
         importLabel.style.flex = '1';
@@ -566,13 +599,10 @@ function buildDocsUI(plane) {
             const reader = new FileReader();
             reader.onload = () => {
                 saveDoc(def.id, reader.result);
-                
-                // NOUVEAU : Purger l'ancien blob pour forcer la mise à jour
                 if (blobCache[def.id]) {
-                    URL.revokeObjectURL(blobCache[def.id]); // Libère la RAM
+                    URL.revokeObjectURL(blobCache[def.id]);
                     delete blobCache[def.id];
                 }
-
                 link.onclick = () => openDoc(def.id);
                 link.style.cursor = 'pointer';
                 link.querySelector('.doc-badge').textContent = '✓ OK';
@@ -587,7 +617,6 @@ function buildDocsUI(plane) {
 
         btnRow.appendChild(importLabel);
 
-        // Bouton supprimer — toujours créé, visible si doc présent
         const delBtn = document.createElement('button');
         delBtn.textContent = '🗑';
         delBtn.title = 'Supprimer ce PDF';
@@ -619,29 +648,20 @@ function getDoc(id) {
     try { return localStorage.getItem('doc_' + id); } catch(e) { return null; }
 }
 
-// Cache des blob URLs pour éviter de recréer le même blob deux fois
 const blobCache = {};
 
-// NOUVEAU : Fonction openDoc avec visualiseur intégré
 async function openDoc(id) {
     const data = getDoc(id);
     if (!data) return;
-
     try {
         if (!blobCache[id]) {
-            // Conversion native et ultra-rapide via fetch()
             const response = await fetch(data);
             const blob = await response.blob();
             blobCache[id] = URL.createObjectURL(blob);
         }
-        
-        // Ouvrir dans le visualiseur intégré
         openPDFViewer(blobCache[id], id + '.pdf');
-
     } catch(e) {
         console.error("Erreur de Blob :", e);
-        
-        // Fallback : téléchargement direct
         const a = document.createElement('a');
         a.href = data;
         a.download = id + '.pdf';
@@ -709,10 +729,9 @@ function calculerTout() {
 }
 
 // ══════════════════════════════════════════════════════
-//  SAUVEGARDE AUTO (localStorage)
+//  SAUVEGARDE AUTO
 // ══════════════════════════════════════════════════════
 function saveVol() {
-    // Debounce 600ms
     clearTimeout(saveTimer);
     const dot = document.getElementById('saveDot');
     if (dot) dot.style.display = 'inline-block';
@@ -725,9 +744,7 @@ function saveVol() {
             const el = document.getElementById(id);
             if (el) data[id] = el.value;
         });
-        try {
-            localStorage.setItem(key, JSON.stringify(data));
-        } catch(e) {}
+        try { localStorage.setItem(key, JSON.stringify(data)); } catch(e) {}
         if (dot) dot.style.display = 'none';
     }, 600);
 }
@@ -736,8 +753,6 @@ function loadVol(plane) {
     const key = 'vol_' + plane;
     let data = {};
     try { data = JSON.parse(localStorage.getItem(key) || '{}'); } catch(e) {}
-
-    // Délai pour que les inputs fuel soient dans le DOM
     setTimeout(() => {
         Object.entries(data).forEach(([id, val]) => {
             const el = document.getElementById(id);
@@ -752,9 +767,9 @@ function loadVol(plane) {
 // ══════════════════════════════════════════════════════
 function saveChecks(plane) {
     const state = {
-        NOTAM: document.getElementById('chkNOTAM')?.checked,
-        METEO: document.getElementById('chkMETEO')?.checked,
-        AZBA:  document.getElementById('chkAZBA')?.checked,
+        NOTAM:  document.getElementById('chkNOTAM')?.checked,
+        METEO:  document.getElementById('chkMETEO')?.checked,
+        AZBA:   document.getElementById('chkAZBA')?.checked,
         SUPAIP: document.getElementById('chkSUPAIP')?.checked,
     };
     try { localStorage.setItem('checks_' + plane, JSON.stringify(state)); } catch(e) {}
@@ -775,11 +790,13 @@ function loadChecks(plane) {
 // ══════════════════════════════════════════════════════
 function checkDecision() {
     const all = Array.from(document.querySelectorAll('.go-check')).every(c => c.checked);
-    const status = document.getElementById('goStatus');
-    const btn = document.getElementById('btnMonVol');
+    const status  = document.getElementById('goStatus');
+    const btn     = document.getElementById('btnMonVol');
+    const btnNotes = document.getElementById('btnNotes');
     status.textContent = all ? '🚀 GO' : 'NO GO';
     status.className = all ? 'is-go' : '';
     btn.classList.toggle('hidden', !all);
+    btnNotes.classList.toggle('hidden', !all);
     saveChecks(currentPlane);
 }
 
@@ -833,6 +850,10 @@ function goBack() {
     document.getElementById('hangarSection').classList.remove('hidden');
     document.getElementById('cockpitSection').classList.add('hidden');
     document.getElementById('monVolSection').classList.add('hidden');
+    document.getElementById('notesSection').classList.add('hidden');
+    // Réinitialise le canvas pour le prochain vol
+    const canvas = document.getElementById('noteCanvas');
+    canvas._ready = false;
 }
 
 function toggleMonVol() {
@@ -844,7 +865,7 @@ function toggleMonVol() {
 }
 
 // ══════════════════════════════════════════════════════
-//  EFFACER VOL (seulement les données, pas les docs)
+//  EFFACER VOL
 // ══════════════════════════════════════════════════════
 function clearVol() {
     if (!confirm('Effacer les données du vol en cours ?')) return;
@@ -888,11 +909,10 @@ async function archiverVol() {
     try {
         const zip = new JSZip();
         const date = new Date();
-        const dateStr = date.toISOString().slice(0,10); // YYYY-MM-DD
+        const dateStr = date.toISOString().slice(0,10);
         const folderName = `VOL_${currentPlane}_${dateStr}`;
         const folder = zip.folder(folderName);
 
-        // ── 1. Log de vol (texte)
         const horaDep  = document.getElementById('horaDep')?.value || '';
         const horaArr  = document.getElementById('horaArr')?.value || '';
         const huile    = document.getElementById('huile')?.value || '';
@@ -951,7 +971,6 @@ Généré par MyNav EFB`;
 
         folder.file('log_vol.txt', logTxt);
 
-        // ── 2. Fichiers briefing du jour (METEO, NOTAM…)
         if (briefingFiles.length > 0) {
             const briefFolder = folder.folder('briefing');
             for (const bf of briefingFiles) {
@@ -964,17 +983,14 @@ Généré par MyNav EFB`;
             }
         }
 
-        // ── Génération ZIP
         lastZipName = `${folderName}.zip`;
         lastZipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
 
-        // Téléchargement automatique
         const url = URL.createObjectURL(lastZipBlob);
         const a = document.createElement('a');
         a.href = url; a.download = lastZipName; a.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
 
-        // Activer le bouton mail
         document.getElementById('btnMail').disabled = false;
         const info = document.getElementById('archiveInfo');
         info.style.display = 'block';
@@ -996,7 +1012,6 @@ Généré par MyNav EFB`;
 // ══════════════════════════════════════════════════════
 function envoyerMail() {
     if (!lastZipBlob) { showToast('⚠️ Générez d\'abord l\'archive ZIP'); return; }
-
     const date = new Date().toLocaleDateString('fr-FR');
     const subject = encodeURIComponent(`Dossier de vol ${currentPlane} – ${date}`);
     const body = encodeURIComponent(
@@ -1009,23 +1024,140 @@ Date : ${date}
 Fichier : ${lastZipName}
 
 Généré par MyNav EFB`);
-
-    // Sur mobile : ouvre l'appli mail native
-    // Le ZIP a déjà été téléchargé, l'utilisateur l'attache manuellement
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
-
     showToast('📧 Application mail ouverte — attachez le ZIP téléchargé');
 }
 
 // ══════════════════════════════════════════════════════
-//  VISUALISEUR PDF.js — universel (Android, iOS, Desktop)
+//  TOAST
+// ══════════════════════════════════════════════════════
+function showToast(msg, success = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (success ? ' success' : '');
+    setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ══════════════════════════════════════════════════════
+//  NOTES DE VOL — Canvas stylet/tactile/souris
+// ══════════════════════════════════════════════════════
+let notesTool = 'pen';
+let notesDrawing = false;
+let notesLastX = 0, notesLastY = 0;
+
+function toggleNotes() {
+    const s = document.getElementById('notesSection');
+    s.classList.toggle('hidden');
+    if (!s.classList.contains('hidden')) {
+        initCanvas();
+        setTimeout(() => s.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+}
+
+function initCanvas() {
+    const canvas = document.getElementById('noteCanvas');
+    if (canvas._ready) return;
+    canvas._ready = true;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr  = window.devicePixelRatio || 1;
+    const cssW = rect.width;
+    const cssH = Math.round(cssW * 1.4); // ratio A4 portrait
+
+    canvas.width  = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    canvas.style.height = cssH + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.lineCap  = 'round';
+    ctx.lineJoin = 'round';
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, cssW, cssH);
+
+    // Événements pointeur unifiés (stylet, doigt, souris)
+    canvas.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        canvas.setPointerCapture(e.pointerId);
+        notesDrawing = true;
+        const [x, y] = getCanvasPos(canvas, e);
+        notesLastX = x; notesLastY = y;
+        drawDot(ctx, x, y);
+    });
+
+    canvas.addEventListener('pointermove', e => {
+        if (!notesDrawing) return;
+        e.preventDefault();
+        const [x, y] = getCanvasPos(canvas, e);
+        drawLine(ctx, notesLastX, notesLastY, x, y);
+        notesLastX = x; notesLastY = y;
+    });
+
+    const stopDraw = (e) => { notesDrawing = false; };
+    canvas.addEventListener('pointerup',     stopDraw);
+    canvas.addEventListener('pointercancel', stopDraw);
+    canvas.addEventListener('pointerleave',  stopDraw);
+}
+
+function getCanvasPos(canvas, e) {
+    const rect = canvas.getBoundingClientRect();
+    return [e.clientX - rect.left, e.clientY - rect.top];
+}
+
+function drawDot(ctx, x, y) {
+    ctx.beginPath();
+    if (notesTool === 'eraser') {
+        ctx.arc(x, y, 12, 0, Math.PI * 2);
+        ctx.fillStyle = 'white';
+        ctx.fill();
+    } else {
+        ctx.arc(x, y, 1, 0, Math.PI * 2);
+        ctx.fillStyle = '#111111';
+        ctx.fill();
+    }
+}
+
+function drawLine(ctx, x1, y1, x2, y2) {
+    ctx.beginPath();
+    if (notesTool === 'eraser') {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth   = 24;
+    } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth   = 2;
+    }
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+}
+
+function setTool(tool) {
+    notesTool = tool;
+    document.getElementById('btnPen').classList.toggle('active', tool === 'pen');
+    document.getElementById('btnEraser').classList.toggle('active', tool === 'eraser');
+}
+
+function clearCanvas() {
+    if (!confirm('Effacer toutes les notes ?')) return;
+    const canvas = document.getElementById('noteCanvas');
+    const ctx    = canvas.getContext('2d');
+    const dpr    = window.devicePixelRatio || 1;
+    const cssW   = canvas.width / dpr;
+    const cssH   = canvas.height / dpr;
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, cssW, cssH);
+}
+
+// ══════════════════════════════════════════════════════
+//  VISUALISEUR PDF.js
 // ══════════════════════════════════════════════════════
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 let pdfDoc = null;
 let pdfCurrentPage = 1;
-let pdfTotalPages = 0;
-let pdfRendering = false;
+let pdfTotalPages  = 0;
 
 async function openPDFViewer(blobUrl, name) {
     if (!blobUrl) { showToast('⚠️ Fichier non disponible'); return; }
@@ -1041,9 +1173,9 @@ async function openPDFViewer(blobUrl, name) {
     try {
         const loadingTask = pdfjsLib.getDocument(blobUrl);
         pdfDoc = await loadingTask.promise;
-        pdfTotalPages = pdfDoc.numPages;
+        pdfTotalPages  = pdfDoc.numPages;
         pdfCurrentPage = 1;
-        content.innerHTML = ''; // vider le loading
+        content.innerHTML = '';
         await renderAllPages();
         updateNavButtons();
     } catch(e) {
@@ -1077,7 +1209,6 @@ async function renderAllPages() {
 }
 
 function pdfPrevPage() {
-    const pages = document.querySelectorAll('#pdfViewerContent canvas');
     if (pdfCurrentPage > 1) {
         pdfCurrentPage--;
         document.getElementById('pdfPage_' + pdfCurrentPage)?.scrollIntoView({ behavior: 'smooth' });
@@ -1086,7 +1217,6 @@ function pdfPrevPage() {
 }
 
 function pdfNextPage() {
-    const pages = document.querySelectorAll('#pdfViewerContent canvas');
     if (pdfCurrentPage < pdfTotalPages) {
         pdfCurrentPage++;
         document.getElementById('pdfPage_' + pdfCurrentPage)?.scrollIntoView({ behavior: 'smooth' });
@@ -1100,7 +1230,6 @@ function updateNavButtons() {
     document.getElementById('btnNext').disabled = pdfCurrentPage >= pdfTotalPages;
 }
 
-// Mise à jour de la page courante au scroll
 document.getElementById('pdfViewerContent').addEventListener('scroll', () => {
     const canvases = document.querySelectorAll('#pdfViewerContent canvas');
     const content  = document.getElementById('pdfViewerContent');
@@ -1119,22 +1248,17 @@ function closePDFViewer() {
     pdfDoc = null; pdfCurrentPage = 1; pdfTotalPages = 0;
 }
 
-// Fermer avec la touche ESC
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        closePDFViewer();
-    }
+    if (e.key === 'Escape') closePDFViewer();
 });
 
 // ══════════════════════════════════════════════════════
-//  PWA — SERVICE WORKER (inline, évite un fichier séparé)
+//  PWA — SERVICE WORKER
 // ══════════════════════════════════════════════════════
 if ('serviceWorker' in navigator) {
     const swCode = `
 const CACHE = 'mynav-v1';
-self.addEventListener('install', e => {
-    self.skipWaiting();
-});
+self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('fetch', e => {
     e.respondWith(
         caches.match(e.request).then(r => r || fetch(e.request).catch(() => new Response('Hors ligne', {status: 503})))
